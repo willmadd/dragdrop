@@ -2,132 +2,149 @@ import offsetPolygon from "offset-polygon";
 import React, { useMemo } from "react";
 import * as THREE from "three";
 import { Room } from "./Property";
+import { Text } from "@react-three/drei";
 
-const RoomMeshes = ({ room }: { room: Room }) => {
-  const extrudeSettings = useMemo(
-    () => ({ depth: 2.3, bevelEnabled: false }),
-    []
-  );
+const WALL_THICKNESS = 0.2;
 
-  // 2D footprint
+const RoomMeshes = ({
+  room,
+  handleAddWindow,
+}: {
+  room: Room;
+  handleAddWindow: (wallId: string) => void;
+}) => {
+  console.log("Rendering RoomMeshes for room:", room);
   const basePts = useMemo(
     () => room.walls.map((w) => new THREE.Vector2(w.position.x, w.position.z)),
     [room.walls]
   );
-
   const { floorShape, wallShape } = useMemo(() => {
     const floorShape = new THREE.Shape(basePts);
-
     const offsetPts = offsetPolygon(basePts, 0.2);
+
     const wallShape = new THREE.Shape(
       offsetPts.map((p) => new THREE.Vector2(p.x, p.y))
     );
+
     wallShape.holes = [new THREE.Path(basePts)];
 
     return { floorShape, wallShape };
   }, [basePts]);
 
-  const centroid = useMemo(() => {
-    const c = basePts.reduce(
-      (acc, p) => acc.add(new THREE.Vector3(p.x, 0, p.y)),
-      new THREE.Vector3()
-    );
-    return c.multiplyScalar(1 / basePts.length);
-  }, [basePts]);
+  const getWallSegmentEnds = (index: number) => {
+    const startCorner = room.walls[index];
+    const endCorner = room.walls[(index + 1) % room.walls.length];
 
-  // Helper: get start/end of wall i
-  const getWallEnds = (i: number) => {
-    const a = room.walls[i];
-    const b = room.walls[(i + 1) % room.walls.length]; // next corner
-    const A = new THREE.Vector3(a.position.x, 0, a.position.z);
-    const B = new THREE.Vector3(b.position.x, 0, b.position.z);
-    return { A, B };
+    const start = new THREE.Vector3(
+      startCorner.position.x,
+      0,
+      startCorner.position.z
+    );
+    const end = new THREE.Vector3(
+      endCorner.position.x,
+      0,
+      endCorner.position.z
+    );
+
+    return { start, end };
   };
 
-  // Small offset outward from wall to avoid z-fighting
-  const EPS = 0.01;
+  const WALL_HEIGHT = 2.3;
 
   return (
-    <group>
-      {/* Floor */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[room.position.x, 0, room.position.z]}
-      >
-        <shapeGeometry args={[floorShape]} />
-        <meshStandardMaterial color="red" />
-      </mesh>
+    <>
+      <group position={[room.position.x, 0, room.position.z]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+          <shapeGeometry args={[floorShape]} />
+          <meshStandardMaterial color="black" side={THREE.DoubleSide} />
+        </mesh>
 
-      {/* Walls */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[room.position.x, 0, room.position.z]}
-      >
-        <extrudeGeometry args={[wallShape, extrudeSettings]} />
-        <meshStandardMaterial color="lightblue" />
-      </mesh>
+        <mesh
+          rotation={[Math.PI / 2, 0, 0]}
+          position={[0, WALL_HEIGHT, 0]}
+          onClick={() => handleAddWindow(room.id)}
+        >
+          <extrudeGeometry
+            args={[
+              wallShape,
+              {
+                depth: WALL_HEIGHT,
+                bevelEnabled: false,
+                curveSegments: 12,
+                steps: 1,
+              },
+            ]}
+          />
+          <meshStandardMaterial color="red" side={THREE.DoubleSide} />
+        </mesh>
 
-      {/* Windows */}
-      {room.walls.flatMap(
-        (wall, i) =>
-          wall.feature?.map((feature) => {
-            if (feature.type !== "window") return null;
+        {room.walls.map((wall, i) => {
+          const { start, end } = getWallSegmentEnds(i);
+          const dir = end.clone().sub(start);
+          const dirNorm = dir.clone().normalize();
+          const length = dir.length();
+          const mid = start.clone().addScaledVector(dir, 0.5);
+          const angle = Math.atan2(dir.z, dir.x);
 
-            // 1. segment & direction
-            const { A, B } = getWallEnds(i);
+          return (
+            <group key={wall.id}>
+              <mesh
+                position={[
+                  mid.x + room.position.x,
+                  WALL_HEIGHT / 2,
+                  mid.z + room.position.z,
+                ]}
+                rotation={[0, -angle, 0]}
+                onClick={(e) => {
+                  e.stopPropagation();
 
-            const dir = B.clone().sub(A); // vector along wall
-            const wallLen = dir.length();
-            const dirN = dir.clone().normalize();
-
-            // clamp/check feature.position.x so it doesn't run past wall
-            const distAlong = Math.min(
-              Math.max(feature.position.x, 0),
-              wallLen
-            );
-
-            // 2. point along the wall
-            const along = A.clone().add(dirN.clone().multiplyScalar(distAlong));
-
-            // 3. vertical center
-            const y = feature.position.y + feature.size.y * 0.5;
-
-            // 4. outward normal (2D)
-            const normal2D = new THREE.Vector3(-dirN.z, 0, dirN.x); // rotate 90° around Y
-            const outward = normal2D.multiplyScalar(EPS);
-
-            const pos = along.clone().add(outward);
-            pos.y = y;
-
-            let n = normal2D.clone().normalize();
-
-            // Flip if pointing inwards
-            const toCenter = centroid.clone().sub(pos).normalize();
-            if (n.dot(toCenter) > 0) {
-              n.multiplyScalar(-1);
-            }
-
-            // final offset to avoid z-fighting or to embed half depth
-            const offset = n.clone().multiplyScalar(EPS); // or (wallThickness/2 - feature.size.z/2)
-            pos.add(offset);
-
-            // orient the mesh so local +Z faces `n`
-            const quat = new THREE.Quaternion().setFromUnitVectors(
-              new THREE.Vector3(0, 0, 1),
-              n
-            );
-
-            return (
-              <mesh key={feature.id} position={pos} quaternion={quat}>
-                <boxGeometry
-                  args={[feature.size.x, feature.size.y, feature.size.z]}
-                />
-                <meshStandardMaterial color="yellow" />
+                  console.log("%c%s", "color: #ff0000", wall.id);
+                  handleAddWindow(wall.id);
+                }}
+              >
+                <boxGeometry args={[length, WALL_HEIGHT, 0.25]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
               </mesh>
-            );
-          }) ?? []
-      )}
-    </group>
+
+              {wall.feature
+                ?.filter((f) => f.type === "window")
+                .map((f) => {
+                  const winW = f.size.x;
+                  const winH = f.size.y;
+                  const winD = f.size.z ?? 0.18;
+
+                  const along = f.position.x;
+                  const y = f.position.y + winH / 2;
+                  const centerAlong = along + winW / 2;
+
+                  const worldStart = start.clone().add(room.position);
+                  const center = worldStart
+                    .clone()
+                    .addScaledVector(dirNorm, centerAlong);
+
+                  const inward = new THREE.Vector3(
+                    -dirNorm.z,
+                    0,
+                    dirNorm.x
+                  ).multiplyScalar(-0.1);
+                  center.add(inward);
+
+                  return (
+                    <mesh
+                      key={f.id}
+                      position={[center.x, y, center.z]}
+                      rotation={[0, -angle, 0]}
+                    >
+                      <boxGeometry args={[winW, winH, winD]} />
+                      <meshStandardMaterial color="skyblue" />
+                    </mesh>
+                  );
+                })}
+            </group>
+          );
+        })}
+      </group>
+    </>
   );
 };
 

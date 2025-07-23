@@ -23,7 +23,7 @@ export type Room = {
 type Property = {
   rooms: Room[];
 };
-
+const WINDOW_HEIGHT_FROM_FLOOR = 0.85;
 const Property = () => {
   const property: Property = {
     rooms: [
@@ -38,7 +38,7 @@ const Property = () => {
               {
                 id: "window-1",
                 type: "window",
-                position: new THREE.Vector2(0, 1),
+                position: new THREE.Vector2(0.5, WINDOW_HEIGHT_FROM_FLOOR),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -50,7 +50,7 @@ const Property = () => {
               {
                 id: "window-3",
                 type: "window",
-                position: new THREE.Vector2(2, 1.5),
+                position: new THREE.Vector2(2, WINDOW_HEIGHT_FROM_FLOOR),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -62,7 +62,7 @@ const Property = () => {
               {
                 id: "window-2",
                 type: "window",
-                position: new THREE.Vector2(3, 1.5),
+                position: new THREE.Vector2(3, WINDOW_HEIGHT_FROM_FLOOR),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -74,7 +74,7 @@ const Property = () => {
               {
                 id: "window-4",
                 type: "window",
-                position: new THREE.Vector2(2, 1.5),
+                position: new THREE.Vector2(2, WINDOW_HEIGHT_FROM_FLOOR),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -84,11 +84,22 @@ const Property = () => {
     ],
   };
 
+  const [houseData, setHouseData] = React.useState<Property>(property);
+
+  const handleAddWindow = (wallId: string) => {
+    const getWallId = () => console.log("getWallId" + wallId);
+    getWallId();
+  };
+
   return (
     <>
       <axesHelper args={[5]} />
-      {property.rooms.map((room) => (
-        <RoomMeshes key={room.id} room={room} />
+      {houseData.rooms.map((room) => (
+        <RoomMeshes
+          key={room.id}
+          room={room}
+          handleAddWindow={handleAddWindow}
+        />
       ))}
     </>
   );
