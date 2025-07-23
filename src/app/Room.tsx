@@ -9,9 +9,11 @@ const WALL_THICKNESS = 0.2;
 const RoomMeshes = ({
   room,
   handleAddWindow,
+  wallsGroupRef,
 }: {
   room: Room;
   handleAddWindow: (wallId: string) => void;
+  wallsGroupRef: React.RefObject<THREE.Group>;
 }) => {
   console.log("Rendering RoomMeshes for room:", room);
   const basePts = useMemo(
@@ -101,9 +103,24 @@ const RoomMeshes = ({
                   console.log("%c%s", "color: #ff0000", wall.id);
                   handleAddWindow(wall.id);
                 }}
+                ref={(m) => {
+                  if (m) {
+                    m.userData.wallData = {
+                      id: wall.id,
+                      start,
+                      dir: dirNorm,
+                      length,
+                      angle,
+                    };
+                  }
+                }}
               >
-                <boxGeometry args={[length, WALL_HEIGHT, 0.25]} />
-                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+                <boxGeometry args={[length, WALL_HEIGHT, 0.55]} />
+                <meshBasicMaterial
+                  transparent
+                  opacity={0.5}
+                  depthWrite={false}
+                />
               </mesh>
 
               {wall.feature

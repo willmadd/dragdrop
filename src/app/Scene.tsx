@@ -1,4 +1,5 @@
 import Camera from "./Camera";
+import GhostWindow from "./GhostWindow";
 import Property from "./Property";
 import RoomMeshes from "./Room";
 
