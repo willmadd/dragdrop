@@ -38,7 +38,7 @@ const Property = () => {
               {
                 id: "window-1",
                 type: "window",
-                position: new THREE.Vector2(2, 1),
+                position: new THREE.Vector2(0, 1),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -74,7 +74,7 @@ const Property = () => {
               {
                 id: "window-4",
                 type: "window",
-                position: new THREE.Vector2(5, 1.5),
+                position: new THREE.Vector2(2, 1.5),
                 size: new THREE.Vector3(2, 1, 0.3),
               },
             ],
@@ -86,6 +86,7 @@ const Property = () => {
 
   return (
     <>
+      <axesHelper args={[5]} />
       {property.rooms.map((room) => (
         <RoomMeshes key={room.id} room={room} />
       ))}
